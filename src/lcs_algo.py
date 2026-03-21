@@ -2,7 +2,9 @@ from typing import List, Dict, Tuple
 import numpy as np
 
 def lcs_length(X: List[int], Y: List[int]) -> int:
-    """Compute the length of the Longest Common Subsequence of X and Y."""
+    """
+    Compute the length of the Longest Common Subsequence of X and Y.
+    """
     if len(X) < len(Y):
         X, Y = Y, X
 
@@ -10,7 +12,7 @@ def lcs_length(X: List[int], Y: List[int]) -> int:
     if n == 0:
         return 0
     
-    # space optimization dp
+    # space optimized dp
     prev = [0] * (n + 1)
     cur = [0] * (n + 1)
 
@@ -28,12 +30,24 @@ def lcs_length(X: List[int], Y: List[int]) -> int:
 
 
 def lcs_length_full_table(X: List[int], Y: List[int]) -> np.ndarray:
-    """Compute the full LCS DP table (for backtracking / analysis).
-
+    """
+    Compute the full LCS DP table (for backtracking / analysis).
     Returns:
         2-D numpy array L of shape (m+1, n+1).
     """
-    pass
+    m, n = len(X), len(Y)
+    L = np.zeros((m+1, n+1), dtype=int)
+
+    for i in range(1, m+1):
+        for j in range(1, n+1):
+            if X[i-1] == Y[j-1]:
+                L[i][j] = L[i-1][j-1] + 1
+            else:
+                L[i][j] = max(L[i][j-1], L[i-1][j])
+    
+    return L
+
+
 
 def recover_lcs():
     pass
