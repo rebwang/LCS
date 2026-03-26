@@ -1,112 +1,75 @@
-import os
+# data_processing.py
+# Responsible: Soonbee Hwang
+# Loads the MovieLens dataset and constructs ordered user viewing sequences.
+
 import pandas as pd
 from typing import Dict, List, Tuple
 
 
-DATA_DIR = os.path.join("ml-latest-small")
-RATING_THRESHOLD = 3.5      # minimum rating to count as a "positive" interaction
-MIN_SEQUENCE_LENGTH = 5     # users with fewer items are excluded
-
-
-def load_ratings(data_dir: str = DATA_DIR) -> pd.DataFrame:
-    """Load and return the ratings DataFrame.
-
-    Columns: userId, movieId, rating, timestamp
-    """
-    path = os.path.join(data_dir, "ratings.csv")
-    if not os.path.exists(path):
-        raise FileNotFoundError(
-            f"ratings.csv not found at {path}. "
-            f"Please update DATA_DIR to point to your ml-latest-small folder."
-        )
-    df = pd.read_csv(path)
-    print(f"[INFO] Loaded {len(df):,} ratings from {df['userId'].nunique()} users")
+def load_ratings(ratings_path: str) -> pd.DataFrame:
+    """Load ratings CSV and sort each user's history by timestamp."""
+    df = pd.read_csv(ratings_path)
+    df = df.sort_values(['userId', 'timestamp'])
     return df
 
 
-def load_movies(data_dir: str = DATA_DIR) -> pd.DataFrame:
-    """Load movie metadata. Columns: movieId, title, genres"""
-    path = os.path.join(data_dir, "movies.csv")
-    if not os.path.exists(path):
-        raise FileNotFoundError(
-            f"movies.csv not found at {path}. "
-            f"Please update DATA_DIR to point to your ml-latest-small folder."
-        )
-    return pd.read_csv(path)
+def load_movies(movies_path: str) -> pd.DataFrame:
+    """Load movies CSV (movieId, title, genres)."""
+    return pd.read_csv(movies_path)
 
 
-def build_sequences(
-    ratings: pd.DataFrame,
-    rating_threshold: float = RATING_THRESHOLD,
-    min_length: int = MIN_SEQUENCE_LENGTH,
+def build_user_sequences(
+    df: pd.DataFrame,
+    min_len: int = 10,
+    max_len: int = 50,
 ) -> Dict[int, List[int]]:
-    """Convert ratings into per-user ordered viewing sequences.
-
-    Steps:
-      1. Keep only ratings >= rating_threshold (positive interactions).
-      2. Sort each user's ratings by timestamp.
-      3. Extract the ordered list of movieIds.
-      4. Filter out users with fewer than min_length items.
+    """
+    Build an ordered list of movieIds for each user.
 
     Args:
-        ratings: Raw ratings DataFrame.
-        rating_threshold: Minimum star rating to include.
-        min_length: Minimum sequence length to keep a user.
+        df:      Ratings dataframe sorted by (userId, timestamp).
+        min_len: Drop users with fewer than this many ratings.
+        max_len: Keep only the most recent `max_len` items per user.
+                 None means keep all items.
 
     Returns:
-        Dictionary mapping userId -> list of movieIds in chronological order.
+        {userId: [movieId, ...]} sorted chronologically.
     """
-    # Filter to positive interactions
-    pos = ratings[ratings["rating"] >= rating_threshold].copy()
-    pos.sort_values(["userId", "timestamp"], inplace=True)
-
     sequences: Dict[int, List[int]] = {}
-    for uid, group in pos.groupby("userId"):
-        seq = group["movieId"].tolist()
-        if len(seq) >= min_length:
-            sequences[int(uid)] = seq
-
-    print(f"[INFO] Built sequences for {len(sequences)} users "
-          f"(threshold={rating_threshold}, min_length={min_length})")
+    for user_id, group in df.groupby('userId'):
+        movies = group['movieId'].tolist()
+        if len(movies) < min_len:
+            continue
+        if max_len is not None:
+            movies = movies[-max_len:]
+        sequences[int(user_id)] = movies
     return sequences
 
 
 def train_test_split(
-    sequences: Dict[int, List[int]],
+    sequences: Dict[int, List[int]]
 ) -> Tuple[Dict[int, List[int]], Dict[int, int]]:
-    """Hold out the last item of each user's sequence for testing.
+    """
+    Leave-one-out split: the last item in each sequence is the test label;
+    the rest is the training sequence.
 
     Returns:
-        train_seqs: userId -> sequence without the last item
-        test_items: userId -> the held-out movieId (ground truth)
+        train_sequences: {userId: [movieId, ...]} (all but last item)
+        test_labels:     {userId: movieId}        (last item)
     """
-    train_seqs: Dict[int, List[int]] = {}
-    test_items: Dict[int, int] = {}
-
+    train: Dict[int, List[int]] = {}
+    test: Dict[int, int] = {}
     for uid, seq in sequences.items():
-        train_seqs[uid] = seq[:-1]
-        test_items[uid] = seq[-1]
-
-    print(f"[INFO] Train/test split: {len(train_seqs)} users, "
-          f"1 held-out item each")
-    return train_seqs, test_items
-
-
-def get_movie_title_map(movies: pd.DataFrame) -> Dict[int, str]:
-    """Return a movieId -> title lookup dictionary."""
-    return dict(zip(movies["movieId"], movies["title"]))
+        if len(seq) < 2:
+            continue
+        train[uid] = seq[:-1]
+        test[uid] = seq[-1]
+    return train, test
 
 
-if __name__ == "__main__":
-    ratings = load_ratings()
-    movies = load_movies()
-    sequences = build_sequences(ratings)
-    train, test = train_test_split(sequences)
-
-    # Print sample
-    sample_uid = list(train.keys())[0]
-    title_map = get_movie_title_map(movies)
-    print(f"\n--- Sample: User {sample_uid} ---")
-    print(f"Train sequence length: {len(train[sample_uid])}")
-    print(f"First 5 movies: {[title_map.get(m, m) for m in train[sample_uid][:5]]}")
-    print(f"Held-out test movie:  {title_map.get(test[sample_uid], test[sample_uid])}")
+def get_top_users_by_activity(
+    sequences: Dict[int, List[int]], n: int
+) -> Dict[int, List[int]]:
+    """Return the n users with the longest sequences (most active)."""
+    sorted_users = sorted(sequences.items(), key=lambda x: len(x[1]), reverse=True)
+    return dict(sorted_users[:n])
