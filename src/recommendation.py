@@ -169,23 +169,90 @@ def recall_at_k(
     return hit_rate_at_k(recommendations, test_labels, k)
 
 
+def mrr(
+    recommendations: Dict[int, List[int]],
+    test_labels: Dict[int, int],
+) -> float:
+    """Mean Reciprocal Rank: average of 1/rank for the ground-truth item.
+
+    Rank is 1-indexed; users whose ground-truth item is not in the list
+    contribute 0.
+
+    Args:
+        recommendations: {userId: [ranked_movieId, ...]}
+        test_labels:     {userId: ground_truth_movieId}
+
+    Returns:
+        MRR in [0, 1].
+    """
+    total_rr = 0.0
+    total = 0
+    for uid, predicted in recommendations.items():
+        if uid not in test_labels:
+            continue
+        total += 1
+        gt = test_labels[uid]
+        if gt in predicted:
+            rank = predicted.index(gt) + 1
+            total_rr += 1.0 / rank
+    return total_rr / total if total > 0 else 0.0
+
+
 def evaluate_all_metrics(
     recommendations: Dict[int, List[int]],
     test_labels: Dict[int, int],
     k_values: List[int],
-) -> Dict[str, Dict[int, float]]:
-    """Compute Hit Rate, Precision, and Recall at each K in k_values.
+) -> Dict[str, object]:
+    """Compute Hit Rate, MRR, Precision, and Recall at each K in k_values.
 
     Returns:
         {
           'hit_rate':  {k: value, ...},
+          'mrr':       float,
           'precision': {k: value, ...},
           'recall':    {k: value, ...},
         }
     """
-    results = {'hit_rate': {}, 'precision': {}, 'recall': {}}
+    results: Dict[str, object] = {'hit_rate': {}, 'mrr': 0.0, 'precision': {}, 'recall': {}}
+    results['mrr'] = mrr(recommendations, test_labels)
     for k in k_values:
         results['hit_rate'][k]  = hit_rate_at_k(recommendations, test_labels, k)
         results['precision'][k] = precision_at_k(recommendations, test_labels, k)
         results['recall'][k]    = recall_at_k(recommendations, test_labels, k)
     return results
+
+
+# ---------------------------------------------------------------------------
+# Synthetic smoke-test (run: python recommendation.py)
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import sys, os
+    sys.path.insert(0, os.path.dirname(__file__))
+    from lcs_algo import compute_similarity_matrix
+
+    train = {1: [10, 20, 30, 40], 2: [10, 20, 30, 50, 60], 3: [10, 30, 40, 70]}
+    test  = {1: 50, 2: 70, 3: 60}
+
+    all_items = list({item for seq in train.values() for item in seq})
+    sim_matrix, user_ids = compute_similarity_matrix(train)
+
+    lcs_recs    = recommend_all_users(user_ids, sim_matrix, train, top_k_users=2, top_n_items=20)
+    random_recs = random_recommend(train, all_items, top_n_items=20, seed=42)
+
+    k_values = [1, 5, 10]
+    lcs_results    = evaluate_all_metrics(lcs_recs,    test, k_values)
+    random_results = evaluate_all_metrics(random_recs, test, k_values)
+
+    print("Synthetic test results (3 users)")
+    print(f"  Train: {train}")
+    print(f"  Test:  {test}")
+    print()
+    print(f"  Hit Rate@1:   LCS = {lcs_results['hit_rate'][1]:.4f}  vs  Random = {random_results['hit_rate'][1]:.4f}")
+    print(f"  Hit Rate@5:   LCS = {lcs_results['hit_rate'][5]:.4f}  vs  Random = {random_results['hit_rate'][5]:.4f}")
+    print(f"  Hit Rate@10:  LCS = {lcs_results['hit_rate'][10]:.4f}  vs  Random = {random_results['hit_rate'][10]:.4f}")
+    print(f"  MRR:          LCS = {lcs_results['mrr']:.4f}  vs  Random = {random_results['mrr']:.4f}")
+    print(f"  Precision@5:  LCS = {lcs_results['precision'][5]:.4f}  vs  Random = {random_results['precision'][5]:.4f}")
+    print(f"  Precision@10: LCS = {lcs_results['precision'][10]:.4f}  vs  Random = {random_results['precision'][10]:.4f}")
+    print(f"  Recall@5:     LCS = {lcs_results['recall'][5]:.4f}  vs  Random = {random_results['recall'][5]:.4f}")
+    print(f"  Recall@10:    LCS = {lcs_results['recall'][10]:.4f}  vs  Random = {random_results['recall'][10]:.4f}")
