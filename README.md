@@ -40,10 +40,12 @@ Time complexity: **O(mn)** where m and n are sequence lengths.
 
 We use the [MovieLens ml-latest-small](https://grouplens.org/datasets/movielens/) dataset, which contains 100,836 ratings across 9,742 movies from 610 users.
 
-- Only ratings ≥ 3.5 are kept as positive interactions
-- Sequences are constructed chronologically using timestamps
-- Users with fewer than 5 interactions are excluded
-- The last item in each sequence is held out for evaluation
+- All ratings are used to construct viewing sequences (no rating threshold applied)
+- Sequences are sorted chronologically using timestamps
+- Users with fewer than 10 rated movies are excluded
+- Sequences are truncated to the most recent 50 items per user
+- Top 150 most active users are selected for evaluation
+- The last item in each sequence is held out for evaluation (leave-one-out)
 
 ---
 
@@ -51,19 +53,22 @@ We use the [MovieLens ml-latest-small](https://grouplens.org/datasets/movielens/
 
 ```
 LCS/
-├── ml-latest-small/        # MovieLens dataset
+├── ml-latest-small/         # MovieLens dataset
 │   ├── ratings.csv
 │   ├── movies.csv
 │   ├── links.csv
 │   └── tags.csv
 ├── src/
-│   ├── data_processing.py  # Data loading, cleaning, sequence construction
-│   ├── lcs_algo.py         # Core LCS dynamic programming algorithm
-│   ├── recommendation.py   # Recommendation logic and evaluation metrics
-│   ├── visualize_results.py# Result visualizations and plots
-│   └── main.py             # End-to-end pipeline
-├── tests/                  # Unit tests
-├── requirements.txt        # Python dependencies
+│   ├── data_processing.py   # Data loading, cleaning, sequence construction
+│   ├── lcs_algo.py          # Core LCS dynamic programming algorithm
+│   ├── recommendation.py    # Recommendation logic and evaluation metrics
+│   ├── visualize_results.py # Result visualizations and plots
+│   ├── main.py              # End-to-end pipeline
+│   └── app.py               # Streamlit interactive frontend
+├── figures/                 # Auto-generated output figures
+├── tests/
+│   └── test_lcs.py          # Unit tests for LCS algorithm and similarity
+├── requirements.txt         # Python dependencies
 └── README.md
 ```
 
@@ -87,6 +92,30 @@ pip install -r requirements.txt
 python src/main.py
 ```
 
+Output includes:
+- Data loading stats and sequence counts
+- Pairwise LCS similarity computation
+- Hit Rate evaluation (LCS vs random baseline)
+- 6 figures saved to the `figures/` folder
+
+### 4. Run the Streamlit app (optional)
+```bash
+streamlit run src/app.py
+```
+
+This launches an interactive web interface where you can:
+- Browse recommendations for any user
+- Explore the user-user similarity heatmap
+- Visualize the LCS DP table for any two users
+- Compare LCS vs random evaluation metrics
+
+### 5. Run the tests
+```bash
+pytest tests/test_lcs.py -v
+```
+
+Tests cover: `lcs_length`, `lcs_length_full_table`, `recover_lcs`, `normalized_lcs_similarity`, `compute_similarity_matrix`, and `find_top_k_similar`. All 13 tests pass.
+
 ---
 
 ## Evaluation
@@ -95,7 +124,7 @@ Prediction performance is compared between:
 - **LCS-based recommendations** — uses sequence similarity to predict next item
 - **Random baseline** — recommends a random movie
 
-Metrics used: Hit Rate, MRR, Precision@N, Recall@N
+Metrics used: Hit Rate, Precision@N, and Recall@N evaluated at N ∈ {1, 5, 10, 20}
 
 ---
 
