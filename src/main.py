@@ -10,7 +10,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from data_processing import (
     load_ratings, load_movies,
-    build_user_sequences, train_test_split, get_top_users_by_activity,
+    build_user_interaction_sequences, train_test_split_interactions,
+    get_top_users_by_activity,
 )
 from lcs_algo import compute_similarity_matrix, recover_lcs
 from recommendation import (
@@ -25,13 +26,19 @@ from visualize_results import (
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-DATA_DIR    = os.path.join(os.path.dirname(__file__), '..', 'ml-latest-small')
-MAX_USERS   = 150     # use the N most-active users (keeps runtime reasonable)
-MAX_SEQ_LEN = 50      # truncate sequences to this length
-MIN_SEQ_LEN = 10      # drop users with fewer ratings
-TOP_K_USERS = 10      # collaborative-filtering neighbourhood size
-TOP_N_ITEMS = 20      # recommendation list length
-K_VALUES    = [1, 5, 10, 20]
+DATA_DIR          = os.path.join(os.path.dirname(__file__), '..', 'ml-latest-small')
+MIN_RATING        = 4.0    # treat only high ratings as positive feedback
+MAX_USERS         = 100    # top-N active users; more users add noise and runtime
+MAX_SEQ_LEN       = 50     # recent history is usually more predictive than long tails
+MIN_SEQ_LEN       = 10     # keep enough history to form a stable sequence
+TOP_K_USERS       = 5      # collaborative-filtering neighbourhood size
+TOP_N_ITEMS       = 20     # recommendation list length
+USE_IDF           = False  # niche-item boost hurt next-item accuracy in local tests
+SIMILARITY_POWER  = 1.0    # alpha in sim(u, v)^alpha
+RECENCY_WEIGHT    = 0.2    # beta in 1 + beta * recency_v(item)
+POPULARITY_WEIGHT = 0.05   # lambda for the popularity prior
+RATING_WEIGHT     = 0.50   # gamma for neighbour rating strength
+K_VALUES          = [1, 5, 10, 20]
 
 
 # ---------------------------------------------------------------------------
@@ -47,15 +54,20 @@ def main():
     print('\n[1/5] Loading MovieLens data …')
     ratings_df = load_ratings(os.path.join(DATA_DIR, 'ratings.csv'))
     movies_df  = load_movies(os.path.join(DATA_DIR,  'movies.csv'))
+    ratings_df = ratings_df[ratings_df['rating'] >= MIN_RATING].copy()
+    ratings_df = ratings_df.sort_values(['userId', 'timestamp'])
     movie_titles = dict(zip(movies_df['movieId'], movies_df['title']))
     print(f'      {len(ratings_df):,} ratings, {ratings_df["userId"].nunique()} users, '
-          f'{ratings_df["movieId"].nunique()} movies')
+          f'{ratings_df["movieId"].nunique()} movies  |  rating >= {MIN_RATING}')
 
     # ── 2. Build sequences ───────────────────────────────────────────────────
     print('\n[2/5] Building user viewing sequences …')
-    all_sequences = build_user_sequences(ratings_df, min_len=MIN_SEQ_LEN, max_len=MAX_SEQ_LEN)
-    all_sequences = get_top_users_by_activity(all_sequences, MAX_USERS)
-    train_seqs, test_labels = train_test_split(all_sequences)
+    all_interactions = build_user_interaction_sequences(
+        ratings_df, min_len=MIN_SEQ_LEN, max_len=MAX_SEQ_LEN)
+    all_interactions = get_top_users_by_activity(all_interactions, MAX_USERS)
+    train_seqs, train_interactions, _test_labels = train_test_split_interactions(all_interactions)
+    # Wrap single int labels into lists so evaluation functions support multi-label.
+    test_labels = {uid: [item] for uid, item in _test_labels.items()}
 
     print(f'      {len(train_seqs)} users kept  |  '
           f'avg sequence length: {sum(len(s) for s in train_seqs.values()) / len(train_seqs):.1f}')
@@ -72,7 +84,15 @@ def main():
     # ── 4. Generate recommendations ──────────────────────────────────────────
     print('\n[4/5] Generating recommendations …')
     lcs_recs    = recommend_all_users(user_ids, sim_matrix, train_seqs,
-                                      top_k_users=TOP_K_USERS, top_n_items=TOP_N_ITEMS)
+                                      train_interactions=train_interactions,
+                                      top_k_users=TOP_K_USERS,
+                                      top_n_items=TOP_N_ITEMS,
+                                      use_idf=USE_IDF,
+                                      similarity_power=SIMILARITY_POWER,
+                                      recency_weight=RECENCY_WEIGHT,
+                                      popularity_weight=POPULARITY_WEIGHT,
+                                      rating_weight=RATING_WEIGHT,
+                                      min_rating_for_weight=MIN_RATING)
     random_recs = random_recommend(train_seqs, all_items, top_n_items=TOP_N_ITEMS)
 
     # ── 5. Evaluate ──────────────────────────────────────────────────────────
@@ -81,12 +101,15 @@ def main():
     random_metrics = evaluate_all_metrics(random_recs, test_labels, K_VALUES)
 
     print()
-    print(f'  {"K":<6} {"LCS Hit@K":>12} {"Random Hit@K":>14}')
-    print('  ' + '-' * 34)
+    print(f'  {"K":<6} {"LCS Hit@K":>12} {"Rand Hit@K":>12} {"LCS NDCG@K":>12} {"Rand NDCG@K":>13}')
+    print('  ' + '-' * 55)
     for k in K_VALUES:
-        lcs_hr  = lcs_metrics['hit_rate'][k]
-        rand_hr = random_metrics['hit_rate'][k]
-        print(f'  K={k:<4} {lcs_hr:>12.4f} {rand_hr:>14.4f}')
+        lcs_hr   = lcs_metrics['hit_rate'][k]
+        rand_hr  = random_metrics['hit_rate'][k]
+        lcs_ndcg = lcs_metrics['ndcg'][k]
+        rand_ndcg = random_metrics['ndcg'][k]
+        print(f'  K={k:<4} {lcs_hr:>12.4f} {rand_hr:>12.4f} {lcs_ndcg:>12.4f} {rand_ndcg:>13.4f}')
+    print(f'\n  MRR:  LCS = {lcs_metrics["mrr"]:.4f}  vs  Random = {random_metrics["mrr"]:.4f}')
 
     # ── Visualisations ───────────────────────────────────────────────────────
     print('\nGenerating figures …')

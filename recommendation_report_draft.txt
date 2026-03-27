@@ -1,0 +1,124 @@
+LCS-Based Movie Recommendation System Report
+
+1. Introduction
+
+This project implements a movie recommendation system based on the Longest Common Subsequence (LCS) algorithm. The main idea is to model each user's viewing history as an ordered sequence of movies and measure user-user similarity by comparing the overlap in viewing order. Unlike standard collaborative filtering methods that rely only on co-occurrence counts or matrix factorization, this approach preserves temporal order and tries to capture behavioral similarity from sequential interaction patterns.
+
+The goal of the system is to predict which movie a user is likely to watch next based on the behavior of similar users. In addition to the base LCS similarity, the final system also incorporates recency, popularity, and neighbor rating strength in the recommendation score.
+
+2. Dataset and Preprocessing
+
+The experiments were conducted on the MovieLens small dataset. To make the recommendation task closer to positive-feedback recommendation, only ratings greater than or equal to 4.0 were kept. This filtering step reduces noise because low ratings do not necessarily indicate user preference.
+
+The preprocessing pipeline includes the following steps:
+
+- Sort each user's interactions by timestamp.
+- Keep only users with at least 10 positive interactions.
+- Truncate each user history to the most recent 50 items.
+- Select the 100 most active users for the final experiment.
+- Apply a leave-one-out split, where the last item of each sequence is used as the test target and the previous items are used for training.
+
+This design focuses the model on recent behavior, which is more relevant for next-item prediction than very long historical sequences.
+
+3. Methodology
+
+3.1 User Similarity
+
+For two users X and Y, similarity is computed using normalized LCS:
+
+similarity(X, Y) = LCS(X, Y) / max(|X|, |Y|)
+
+This score is between 0 and 1. A higher score means the two users share a longer common subsequence in their watching histories.
+
+3.2 Recommendation Strategy
+
+For each target user, the system first finds the top 5 most similar neighbors. Then it collects candidate movies that these neighbors watched but the target user has not watched.
+
+The final prediction score for a candidate item i for user u is:
+
+score(u, i) =
+  [sum over neighbors v of sim(u, v)^alpha * (1 + beta * recency_v(i)) * (1 + gamma * rating_v(i))]
+  / [sum over neighbors v of sim(u, v)^alpha + epsilon]
+  + lambda * popularity(i)
+
+where:
+
+- alpha controls the effect of similarity.
+- beta controls the effect of recency.
+- gamma controls the effect of the neighbor's rating.
+- lambda adds a small popularity prior.
+
+In the final version of the system, the parameter setting is:
+
+- alpha = 1.0
+- beta = 0.2
+- gamma = 0.5
+- lambda = 0.05
+
+This design improves over a plain LCS vote because it does not treat all neighbor interactions equally. More recent items and higher-rated items from similar users receive more weight.
+
+4. Evaluation Metrics
+
+The system is evaluated using the following ranking metrics:
+
+- Hit Rate@K
+- Mean Reciprocal Rank (MRR)
+- Precision@K
+- Recall@K
+- NDCG@K
+
+These metrics are suitable for next-item recommendation because they evaluate not only whether the correct item appears in the recommendation list, but also how highly it is ranked.
+
+5. Experimental Results
+
+The final experiment on the filtered MovieLens data produced the following results:
+
+- Hit Rate@1: 0.0200
+- Hit Rate@5: 0.0300
+- Hit Rate@10: 0.0500
+- Hit Rate@20: 0.0500
+- MRR: 0.0248
+- NDCG@10: 0.0304
+
+For comparison, the random baseline achieved:
+
+- Hit Rate@20: 0.0100
+- MRR: 0.0007
+
+The LCS-based model clearly outperformed the random baseline across the main ranking metrics. Although the absolute values are still modest, the system demonstrates that sequence-aware similarity can provide meaningful recommendation signals.
+
+6. Improvements Made During Development
+
+Several improvements were introduced after the initial version:
+
+First, low ratings were removed from the sequence data. This change was important because treating all ratings as positive feedback introduced noise and reduced recommendation quality.
+
+Second, the sequence length was limited to recent interactions instead of using very long user histories. This helped the model focus on short-term preference patterns that are more useful for next-item prediction.
+
+Third, the scoring function was extended from a simple similarity sum to a rating-aware and recency-aware prediction equation. This improved the ranking quality because it gave more importance to items that were both recently consumed and highly rated by similar users.
+
+Fourth, a small popularity prior was added as a fallback signal. This makes the model more stable when neighborhood evidence is weak.
+
+7. Discussion
+
+The results suggest that LCS is a reasonable method for capturing sequential similarity, especially when user behavior order matters. However, the model also has several limitations.
+
+One limitation is computational cost. Pairwise LCS computation becomes expensive as the number of users and sequence lengths increase.
+
+Another limitation is that LCS only captures exact item overlap in order. If two users have similar tastes but watch different movies from the same genre, the current method cannot recognize that relationship.
+
+In addition, the current evaluation uses a leave-one-out setup with one target item per user. This is standard for next-item prediction, but it does not fully reflect broader top-N recommendation scenarios.
+
+8. Future Work
+
+Several directions could further improve the system:
+
+- Use a recent-window LCS instead of full-history LCS.
+- Introduce genre or content features to capture semantic similarity between movies.
+- Compare LCS against stronger baselines such as popularity-based recommendation, item-based collaborative filtering, or matrix factorization.
+- Optimize runtime with approximate neighbor search or more efficient similarity computation.
+- Tune hyperparameters more systematically with grid search.
+
+9. Conclusion
+
+In conclusion, this project developed a sequence-based movie recommendation system using LCS similarity and an improved rating-aware scoring function. The final system performs better than a random baseline and shows that ordered user histories can provide useful information for recommendation. While the current results still leave room for improvement, the project demonstrates a clear and interpretable recommendation pipeline and provides a strong foundation for future extensions.

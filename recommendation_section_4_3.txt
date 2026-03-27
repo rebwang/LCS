@@ -1,0 +1,29 @@
+4.3 Recommendation Engine & Evaluation (Yue Liang)
+
+Completed:
+
+- Implemented the LCS-based recommendation function using weighted voting from the top-K most similar neighbours.
+- Implemented a rating-aware prediction equation that incorporates neighbour similarity, recency, rating strength, and a small popularity prior.
+- Implemented a random baseline recommender that selects N unseen movies at random.
+- Implemented evaluation metrics including Hit Rate, Mean Reciprocal Rank (MRR), Precision@N, Recall@N, and NDCG@N for N in {1, 5, 10, 20}.
+- Implemented the full evaluation loop that compares the LCS-based recommender with the random baseline across all test users.
+
+Results:
+
+Final experimental results on the filtered MovieLens dataset:
+
+- Hit Rate@1: 0.0200
+- Hit Rate@5: 0.0300
+- Hit Rate@10: 0.0500
+- Hit Rate@20: 0.0500
+- MRR: 0.0248
+- NDCG@10: 0.0304
+
+For comparison, the random baseline achieved:
+
+- Hit Rate@20: 0.0100
+- MRR: 0.0007
+
+Summary:
+
+The LCS-based recommendation engine outperformed the random baseline on the main ranking metrics. The final version performed better after introducing rating-aware scoring and focusing on recent high-rating interactions, which made the recommendation results more relevant for next-item prediction.

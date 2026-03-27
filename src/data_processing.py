@@ -46,6 +46,23 @@ def build_user_sequences(
     return sequences
 
 
+def build_user_interaction_sequences(
+    df: pd.DataFrame,
+    min_len: int = 10,
+    max_len: int = 50,
+) -> Dict[int, List[Tuple[int, float]]]:
+    """Build an ordered list of (movieId, rating) pairs for each user."""
+    interactions: Dict[int, List[Tuple[int, float]]] = {}
+    for user_id, group in df.groupby('userId'):
+        pairs = list(zip(group['movieId'].tolist(), group['rating'].tolist()))
+        if len(pairs) < min_len:
+            continue
+        if max_len is not None:
+            pairs = pairs[-max_len:]
+        interactions[int(user_id)] = [(int(movie_id), float(rating)) for movie_id, rating in pairs]
+    return interactions
+
+
 def train_test_split(
     sequences: Dict[int, List[int]]
 ) -> Tuple[Dict[int, List[int]], Dict[int, int]]:
@@ -65,6 +82,34 @@ def train_test_split(
         train[uid] = seq[:-1]
         test[uid] = seq[-1]
     return train, test
+
+
+def train_test_split_interactions(
+    interactions: Dict[int, List[Tuple[int, float]]]
+) -> Tuple[
+    Dict[int, List[int]],
+    Dict[int, List[Tuple[int, float]]],
+    Dict[int, int],
+]:
+    """Leave-one-out split for interaction histories.
+
+    Returns:
+        train_sequences:    {userId: [movieId, ...]}
+        train_interactions: {userId: [(movieId, rating), ...]}
+        test_labels:        {userId: movieId}
+    """
+    train_sequences: Dict[int, List[int]] = {}
+    train_interactions: Dict[int, List[Tuple[int, float]]] = {}
+    test_labels: Dict[int, int] = {}
+
+    for uid, seq in interactions.items():
+        if len(seq) < 2:
+            continue
+        train_interactions[uid] = seq[:-1]
+        train_sequences[uid] = [movie_id for movie_id, _rating in seq[:-1]]
+        test_labels[uid] = seq[-1][0]
+
+    return train_sequences, train_interactions, test_labels
 
 
 def get_top_users_by_activity(
