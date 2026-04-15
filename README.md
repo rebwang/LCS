@@ -40,11 +40,11 @@ Time complexity: **O(mn)** where m and n are sequence lengths.
 
 We use the [MovieLens ml-latest-small](https://grouplens.org/datasets/movielens/) dataset, which contains 100,836 ratings across 9,742 movies from 610 users.
 
-- All ratings are used to construct viewing sequences (no rating threshold applied)
+- Only ratings ≥ 4.0 are used to construct viewing sequences (positive-feedback filter)
 - Sequences are sorted chronologically using timestamps
 - Users with fewer than 10 rated movies are excluded
 - Sequences are truncated to the most recent 50 items per user
-- Top 150 most active users are selected for evaluation
+- Top 100 most active users are selected for evaluation
 - The last item in each sequence is held out for evaluation (leave-one-out)
 
 ---
@@ -95,7 +95,7 @@ python src/main.py
 Output includes:
 - Data loading stats and sequence counts
 - Pairwise LCS similarity computation
-- Hit Rate evaluation (LCS vs random baseline)
+- Full metric evaluation (LCS vs random baseline): Hit Rate, NDCG, MRR, Precision, Recall
 - 6 figures saved to the `figures/` folder
 
 ### 4. Run the Streamlit app (optional)
@@ -124,7 +124,7 @@ Prediction performance is compared between:
 - **LCS-based recommendations** — uses sequence similarity to predict next item
 - **Random baseline** — recommends a random movie
 
-Metrics used: Hit Rate, Precision@N, and Recall@N evaluated at N ∈ {1, 5, 10, 20}
+Metrics used: Hit Rate, MRR, Precision@N, Recall@N, and NDCG@N evaluated at N ∈ {1, 5, 10, 20}
 
 ---
 

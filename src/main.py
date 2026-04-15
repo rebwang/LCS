@@ -28,7 +28,7 @@ from visualize_results import (
 # ---------------------------------------------------------------------------
 DATA_DIR          = os.path.join(os.path.dirname(__file__), '..', 'ml-latest-small')
 MIN_RATING        = 4.0    # treat only high ratings as positive feedback
-MAX_USERS         = 100    # top-N active users; more users add noise and runtime
+MAX_USERS         = 150    # top-N active users; more users add noise and runtime
 MAX_SEQ_LEN       = 50     # recent history is usually more predictive than long tails
 MIN_SEQ_LEN       = 10     # keep enough history to form a stable sequence
 TOP_K_USERS       = 5      # collaborative-filtering neighbourhood size
