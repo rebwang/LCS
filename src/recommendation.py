@@ -223,6 +223,14 @@ def random_recommend(
 # Evaluation metrics
 # ---------------------------------------------------------------------------
 
+def _relevant_set(test_labels: Dict[int, object], uid: int) -> set:
+    """Ground truth as a set: supports `{uid: movie_id}` or `{uid: [movie_id, ...]}`."""
+    v = test_labels[uid]
+    if isinstance(v, int):
+        return {v}
+    return set(v)
+
+
 def hit_rate_at_k(
     recommendations: Dict[int, List[int]],
     test_labels: Dict[int, List[int]],
@@ -245,7 +253,7 @@ def hit_rate_at_k(
         if uid not in test_labels:
             continue
         total += 1
-        relevant = set(test_labels[uid])
+        relevant = _relevant_set(test_labels, uid)
         if any(item in relevant for item in predicted[:k]):
             hits += 1
     return hits / total if total > 0 else 0.0
@@ -263,7 +271,7 @@ def precision_at_k(
         if uid not in test_labels:
             continue
         total += 1
-        relevant = set(test_labels[uid])
+        relevant = _relevant_set(test_labels, uid)
         hits = sum(1 for item in predicted[:k] if item in relevant)
         total_precision += hits / k
     return total_precision / total if total > 0 else 0.0
@@ -281,7 +289,7 @@ def recall_at_k(
         if uid not in test_labels:
             continue
         total += 1
-        relevant = set(test_labels[uid])
+        relevant = _relevant_set(test_labels, uid)
         hits = sum(1 for item in predicted[:k] if item in relevant)
         total_recall += hits / len(relevant)
     return total_recall / total if total > 0 else 0.0
@@ -308,7 +316,7 @@ def mrr(
         if uid not in test_labels:
             continue
         total += 1
-        relevant = set(test_labels[uid])
+        relevant = _relevant_set(test_labels, uid)
         for rank, item in enumerate(predicted, start=1):
             if item in relevant:
                 total_rr += 1.0 / rank
@@ -341,7 +349,7 @@ def ndcg_at_k(
         if uid not in test_labels:
             continue
         total += 1
-        relevant = set(test_labels[uid])
+        relevant = _relevant_set(test_labels, uid)
 
         # DCG: sum of 1/log2(rank+1) for each relevant item in top-K
         dcg = sum(

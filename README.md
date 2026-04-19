@@ -44,7 +44,7 @@ We use the [MovieLens ml-latest-small](https://grouplens.org/datasets/movielens/
 - Sequences are sorted chronologically using timestamps
 - Users with fewer than 10 rated movies are excluded
 - Sequences are truncated to the most recent 50 items per user
-- Top 100 most active users are selected for evaluation
+- Top 150 most active users are selected for evaluation
 - The last item in each sequence is held out for evaluation (leave-one-out)
 
 ---
